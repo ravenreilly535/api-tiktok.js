@@ -1,55 +1,42 @@
-// api/tiktok.js
 export default async function handler(req, res) {
     const { username } = req.query;
-    const token = 'apify_api_O6RNxNfIzWu2X13vDtnXYBXQBmR46k2u4WuC';
+    const token = 'apify_api_O6RNxNfIzWu2X13vDtnXYBXQBmR46k2u4WuC';  // Yaha Apify ka token daalo
 
     if (!username) {
         return res.status(400).json({ error: 'Username is required' });
     }
 
-    const url = `https://api.apify.com/v2/acts/THsHv6oGvdabJWIjh/runs?token=${token}`;
-    const payload = { tiktokUsernames: [username] };
+    // Step 1: Run Actor (agar naye username ke liye chahiye)
+    const startUrl = `https://api.apify.com/v2/acts/apify~tiktok-scraper/run-sync-get-dataset-items?token=${token}`;
+    const payload = {
+        userProfileUrls: [`https://www.tiktok.com/@${username}`],
+        maxProfiles: 1
+    };
 
     try {
-        // Start the actor run
-        const startResponse = await fetch(url, {
+        const startResponse = await fetch(startUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const startData = await startResponse.json();
-        const runId = startData.data.id;
+        const data = await startResponse.json();
 
-        // Polling for result
-        const getResultUrl = `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${token}`;
-        let result = null;
-        let retries = 0;
-        while (!result && retries < 20) {
-            await new Promise(r => setTimeout(r, 3000));
-            const response = await fetch(getResultUrl);
-            const data = await response.json();
-            if (data.length > 0) {
-                result = data[0];
-                break;
-            }
-            retries++;
+        if (data.length === 0) {
+            return res.status(404).json({ error: 'No data found for this username' });
         }
 
-        if (result) {
-            return res.status(200).json({
-                username: result.username || username,
-                nickname: result.nickname || '',
-                avatar: result.avatar || '',
-                followers: result.followers || 0,
-                following: result.following || 0,
-                likes: result.likes || 0
-            });
-        } else {
-            return res.status(500).json({ error: 'No result found, try again later' });
-        }
+        const profile = data[0];
+        return res.status(200).json({
+            username: profile.uniqueId,
+            nickname: profile.nickname,
+            avatar: profile.avatarThumb,
+            followers: profile.stats.followerCount,
+            following: profile.stats.followingCount,
+            likes: profile.stats.heartCount
+        });
 
     } catch (error) {
-        console.error('Error:', error);
+        console.error(error);
         return res.status(500).json({ error: 'Error fetching data' });
     }
 }
